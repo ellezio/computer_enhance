@@ -1,0 +1,30 @@
+#! /usr/bin/env bash 
+
+set -e
+
+dirpath="computer_enhance/perfaware/part1"
+result=$(find $dirpath -name "*$@*" -not -name "*.asm" -type f)
+count=$(echo "$result" | wc -l)
+
+if [ $count -eq 0 ]; then
+	echo "Error: No matching file found" >&2
+	exit 1
+elif [ $count -gt 1 ]; then
+	echo "Error: Multiple files found:" >&2
+	echo "$result" >&2
+	exit 1
+fi
+
+export INPUT_FILE_PATH=computer_enhance/perfaware/part1/*$@*
+make -s decode > /tmp/sim86_decode
+nasm -o /tmp/sim86_encode /tmp/sim86_decode
+
+set +e
+
+diff /tmp/sim86_encode $result &> /dev/null
+
+if [ $? -eq 0 ]; then
+	echo "No difference found"
+else
+	echo "The files differ"
+fi

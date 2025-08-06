@@ -1,0 +1,5 @@
+#! /usr/bin/env bash
+
+export INPUT_FILE_PATH=computer_enhance/perfaware/part1/*$@*
+make -s decode
+
