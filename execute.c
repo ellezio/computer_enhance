@@ -33,7 +33,6 @@ void set_register(struct register_access reg, uint16_t value) {
   uint16_t old_value = *reg_ptr;
 
   switch (reg.byte) {
-
   case RegByte_Low: {
     *reg_ptr = (*reg_ptr & 0xFF00) | (0x00FF & value);
   } break;
@@ -51,6 +50,44 @@ void set_register(struct register_access reg, uint16_t value) {
   printf(" ; %s:0x%x->0x%x", reg_name, old_value, *reg_ptr);
 }
 
+uint16_t get_reg_value(struct register_access reg) {
+  uint16_t value = reg_table[reg.type - 1];
+
+  switch (reg.byte) {
+  case RegByte_Low:
+    return 0x00FF & value;
+
+  case RegByte_High:
+    return value & 0xFF00;
+
+  case RegByte_All:
+    return value;
+  }
+}
+
+uint16_t get_value(struct operand op) {
+  switch (op.type) {
+
+  case Operand_None: {
+  } break;
+
+  case Operand_Register: {
+    return get_reg_value(op.register_);
+  } break;
+
+  case Operand_Memory: {
+  } break;
+
+  case Operand_Immediate:
+    return op.immediate;
+
+  case Operand_RelativeImmediate: {
+  } break;
+  }
+
+  return 0;
+}
+
 void execute_instruction(struct instruction *instruction) {
   struct operand destination = instruction->operand[0];
   struct operand source = instruction->operand[1];
@@ -61,7 +98,7 @@ void execute_instruction(struct instruction *instruction) {
   } break;
 
   case Operand_Register: {
-    set_register(destination.register_, source.immediate);
+    set_register(destination.register_, get_value(source));
   } break;
 
   case Operand_Memory: {

@@ -205,6 +205,7 @@ int fetch(uint8_t *ptr, int n, FILE *restrict stream) {
   int i = 0;
 
   for (i = 0; i < n; i++) {
+    // buffer fully read, load next chunk
     if (fetch_buf_offest >= BUF_SIZE) {
       int rb = 0;
       if ((rb = fread(fetch_buf, sizeof(uint8_t), BUF_SIZE, stream)) == 0) {
@@ -214,6 +215,7 @@ int fetch(uint8_t *ptr, int n, FILE *restrict stream) {
       fetch_buf_offest = 0;
     }
 
+    // buffer is not full but there is no more content to read
     if (fetch_buf_offest >= fetch_buf_len) {
       return i;
     }
