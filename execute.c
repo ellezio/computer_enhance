@@ -15,6 +15,9 @@
 */
 uint16_t reg_table[8] = {0};
 
+enum op_flag : uint16_t { ZF = 0x20, SF = 0x40 };
+uint16_t op_flags = 0;
+
 void print_registers_state() {
   printf("\nFinal registers:\n");
 
@@ -47,7 +50,7 @@ void set_register(struct register_access reg, uint16_t value) {
   }
 
   char *reg_name = get_register_name(reg);
-  printf(" ; %s:0x%x->0x%x", reg_name, old_value, *reg_ptr);
+  printf(" %s:0x%x->0x%x", reg_name, old_value, *reg_ptr);
 }
 
 uint16_t get_reg_value(struct register_access reg) {
@@ -88,17 +91,14 @@ uint16_t get_value(struct operand op) {
   return 0;
 }
 
-void execute_instruction(struct instruction *instruction) {
-  struct operand destination = instruction->operand[0];
-  struct operand source = instruction->operand[1];
-
-  switch (destination.type) {
+void save_value(struct operand op, uint16_t value) {
+  switch (op.type) {
 
   case Operand_None: {
   } break;
 
   case Operand_Register: {
-    set_register(destination.register_, get_value(source));
+    set_register(op.register_, value);
   } break;
 
   case Operand_Memory: {
@@ -109,5 +109,90 @@ void execute_instruction(struct instruction *instruction) {
 
   case Operand_RelativeImmediate: {
   } break;
+  }
+}
+
+void print_flags_change(uint16_t old_flags, uint16_t new_flags) {
+  printf(" flags:");
+
+  if (old_flags & ZF)
+    printf("Z");
+
+  if (old_flags & SF)
+    printf("S");
+
+  printf("->");
+
+  if (new_flags & ZF)
+    printf("Z");
+
+  if (new_flags & SF)
+    printf("S");
+}
+
+void arithmetic_operation(struct instruction *instruction,
+                          struct operand destination, struct operand source) {
+  uint16_t dv = get_value(destination);
+  uint16_t sv = get_value(source);
+  uint16_t v = 0;
+
+  switch (instruction->type) {
+
+  case INST_ADD: {
+    v = dv + sv;
+    save_value(destination, v);
+  } break;
+
+  case INST_SUB: {
+    v = dv - sv;
+    save_value(destination, v);
+  } break;
+
+  case INST_CMP: {
+    v = dv - sv;
+  } break;
+
+  default:
+    printf("unknown arithmetic operation");
+    return;
+  }
+
+  uint16_t old_flags = op_flags;
+
+  if (v == 0) {
+    op_flags = op_flags | ZF;
+  } else {
+    op_flags = op_flags & ~ZF;
+  }
+
+  if (v & 0x8000) {
+    op_flags = op_flags | SF;
+  } else {
+    op_flags = op_flags & ~SF;
+  }
+
+  print_flags_change(old_flags, op_flags);
+}
+
+void execute_instruction(struct instruction *instruction) {
+  struct operand destination = instruction->operand[0];
+  struct operand source = instruction->operand[1];
+
+  printf(" ;");
+
+  switch (instruction->type) {
+  case INST_MOV: {
+    save_value(destination, get_value(source));
+  } break;
+
+  case INST_ADD:
+  case INST_SUB:
+  case INST_CMP:
+    arithmetic_operation(instruction, destination, source);
+    break;
+
+  default:
+    printf("unsupported instruction\n");
+    return;
   }
 }
