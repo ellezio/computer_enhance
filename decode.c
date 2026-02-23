@@ -1,7 +1,8 @@
 #include "decode.h"
 #include "instruction.h"
+#include "memory.h"
+#include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #define MOD(bits) (0b##bits << 6)
 #define REG(bits) (0b##bits << 3)
@@ -195,42 +196,6 @@ struct instruction_encoding instructions[256] = {
 #undef XXX
 #undef SR
 
-#define BUF_SIZE 1024
-
-uint8_t fetch_buf[BUF_SIZE];
-int fetch_buf_offest = BUF_SIZE;
-int fetch_buf_len = 0;
-
-int fetch(uint8_t *ptr, int n, FILE *restrict stream) {
-  int i = 0;
-
-  for (i = 0; i < n; i++) {
-    // buffer fully read, load next chunk
-    if (fetch_buf_offest >= BUF_SIZE) {
-      int rb = 0;
-      if ((rb = fread(fetch_buf, sizeof(uint8_t), BUF_SIZE, stream)) == 0) {
-        return i;
-      }
-      fetch_buf_len = rb;
-      fetch_buf_offest = 0;
-    }
-
-    // buffer is not full but there is no more content to read
-    if (fetch_buf_offest >= fetch_buf_len) {
-      return i;
-    }
-
-    ptr[i] = fetch_buf[fetch_buf_offest];
-
-    // DEBUG: Print fetched bytes.
-    // printf(";%8b\n", fetch_buf[fetch_buf_offest]);
-
-    fetch_buf_offest++;
-  }
-
-  return i;
-}
-
 struct operand get_register_operand(uint8_t reg_index, uint8_t wide) {
   struct register_access reg_table[] = {
       {Reg_A, RegByte_Low},  {Reg_C, RegByte_Low},
@@ -282,23 +247,31 @@ enum effective_address_type get_effective_address_type(uint8_t index,
   return ea_table[index];
 }
 
-struct instruction decode_instruction(uint8_t byte, FILE *fd) {
-  struct instruction inst = {0};
-  struct instruction_encoding inst_encoding = instructions[byte];
-
+bool decode_instruction(mem_t *mem, uint8_t ip, struct instruction *inst) {
   uint8_t buf[2];
+  uint8_t ipo = ip; /* instruction pointer with offset */
+
+  if ((mem_readn(mem, ipo, buf, 1)) <= 0) {
+    return false;
+  }
+  ipo += 1;
+
+  inst->bsize = 1;
+  struct instruction_encoding inst_encoding = instructions[buf[0]];
+
   if (inst_encoding.size == WORD) {
-    fetch(buf, 1, fd);
+    ipo += mem_readn(mem, ipo, buf, 1);
+    inst->bsize++;
   }
 
   if (inst_encoding.extended == EXTENDED) {
     uint8_t ext_bits = (buf[0] >> 3) & 0x7;
-    inst.type = inst_encoding.types[ext_bits];
+    inst->type = inst_encoding.types[ext_bits];
   } else {
-    inst.type = inst_encoding.type;
+    inst->type = inst_encoding.type;
   }
 
-  inst.flags = inst_encoding.fields;
+  inst->flags = inst_encoding.fields;
 
   uint8_t D = inst_encoding.fields & F_D;
   uint8_t W = inst_encoding.fields & F_W;
@@ -308,8 +281,8 @@ struct instruction decode_instruction(uint8_t byte, FILE *fd) {
   uint8_t fields =
       (inst_encoding.size & BYTE) ? inst_encoding.included_fields : buf[0];
 
-  struct operand *reg_op = &inst.operand[D ? 0 : 1];
-  struct operand *rm_op = &inst.operand[D ? 1 : 0];
+  struct operand *reg_op = &inst->operand[D ? 0 : 1];
+  struct operand *rm_op = &inst->operand[D ? 1 : 0];
 
   if (inst_encoding.fields & REG) {
     uint8_t reg_index = (fields & 0x38) >> 3;
@@ -335,19 +308,21 @@ struct instruction decode_instruction(uint8_t byte, FILE *fd) {
       uint8_t is_direct_address = rm_op->memory.type == EffectiveAddress_Direct;
 
       if (mod == MOD_MEM8) {
-        fetch(buf, 1, fd);
+        ipo += mem_readn(mem, ipo, buf, 1);
+        inst->bsize++;
         rm_op->memory.displacement = (int8_t)buf[0];
 
       } else if (mod == MOD_MEM16 || is_direct_address) {
-        fetch(buf, 2, fd);
+        ipo += mem_readn(mem, ipo, buf, 2);
+        inst->bsize += 2;
         rm_op->memory.displacement = (buf[1] << 8) | buf[0];
       }
     }
   }
 
-  struct operand *imm_op = &inst.operand[0];
+  struct operand *imm_op = &inst->operand[0];
   if (imm_op->type) {
-    imm_op = &inst.operand[1];
+    imm_op = &inst->operand[1];
   }
 
   uint8_t is_imm_wide = (inst_encoding.fields & DATA) &&
@@ -355,12 +330,14 @@ struct instruction decode_instruction(uint8_t byte, FILE *fd) {
                         !(inst_encoding.fields & F_S);
 
   if (is_imm_wide) {
-    fetch(buf, 2, fd);
+    ipo += mem_readn(mem, ipo, buf, 2);
+    inst->bsize += 2;
     imm_op->type = Operand_Immediate;
     imm_op->immediate = (buf[1] << 8) | buf[0];
 
   } else if (inst_encoding.fields & (DATA | DATA8)) {
-    fetch(buf, 1, fd);
+    ipo += mem_readn(mem, ipo, buf, 1);
+    inst->bsize++;
     imm_op->type = Operand_Immediate;
 
     if (inst_encoding.fields & DATA) {
@@ -372,10 +349,11 @@ struct instruction decode_instruction(uint8_t byte, FILE *fd) {
   }
 
   if (inst_encoding.fields & ADDR) {
-    fetch(buf, 1, fd);
+    ipo += mem_readn(mem, ipo, buf, 1);
+    inst->bsize++;
     imm_op->type = Operand_RelativeImmediate;
     imm_op->immediate = (int8_t)buf[0];
   }
 
-  return inst;
+  return true;
 }

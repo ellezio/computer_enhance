@@ -8,6 +8,8 @@
 #include "decode.c"
 #include "display.c"
 #include "execute.c"
+#include "memory.c"
+#include "memory.h"
 
 int main(int argc, char **argv) {
   bool execute = false;
@@ -43,20 +45,35 @@ int main(int argc, char **argv) {
     printf("bits 16\n");
   }
 
-  uint8_t buf[2];
-  unsigned long rb = 0;
+  mem_t mem = {0};
+  mem_init(&mem);
+  ssize_t cnt = mem_load_file(&mem, fd);
+  if (cnt < 0) {
+    printf("error while loading file\n");
+  }
 
-  while ((fetch(buf, 1, fd)) != 0) {
-    struct instruction instruction = decode_instruction(buf[0], fd);
+  size_t ip = 0;
+  while (ip < cnt) {
+    struct instruction instruction = {0};
+    if (!decode_instruction(&mem, ip, &instruction)) {
+      break;
+    }
 
     print_instruction(&instruction);
 
     if (execute) {
-      execute_instruction(&instruction);
+      ip = execute_instruction(&instruction);
+      if (ip < 0) {
+        break;
+      }
+    } else {
+      ip += instruction.bsize;
     }
 
     printf("\n");
   }
+
+  mem_free(&mem);
 
   if (execute) {
     print_registers_state();

@@ -1,5 +1,6 @@
 #include "display.h"
 #include "instruction.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -14,9 +15,14 @@
 7 - di
 */
 uint16_t reg_table[8] = {0};
+uint16_t original_reg_table[8] = {0};
 
 enum op_flag : uint16_t { ZF = 0x20, SF = 0x40 };
 uint16_t op_flags = 0;
+uint16_t original_op_flags = 0;
+
+uint16_t ip = 0;
+uint16_t original_ip = 0;
 
 void print_registers_state() {
   printf("\nFinal registers:\n");
@@ -29,11 +35,45 @@ void print_registers_state() {
   printf("\tbp: 0x%x (%d)\n", reg_table[5], reg_table[5]);
   printf("\tsi: 0x%x (%d)\n", reg_table[6], reg_table[6]);
   printf("\tdi: 0x%x (%d)\n", reg_table[7], reg_table[7]);
+
+  printf("\tip: 0x%x (%d)\n", ip, ip);
+}
+
+void print_executinon_change() {
+  printf(" ;");
+
+  for (int i = 0; i < 8; ++i) {
+    if (original_reg_table[i] != reg_table[i]) {
+      printf(" %s:0x%x->0x%x", reg_names[i * 3 + 2], original_reg_table[i],
+             reg_table[i]);
+    }
+  }
+
+  if (original_ip != ip) {
+    printf(" ip:0x%x->0x%x", original_ip, ip);
+  }
+
+  if (original_op_flags != op_flags) {
+    printf(" flags:");
+
+    if (original_op_flags & ZF)
+      printf("Z");
+
+    if (original_op_flags & SF)
+      printf("S");
+
+    printf("->");
+
+    if (op_flags & ZF)
+      printf("Z");
+
+    if (op_flags & SF)
+      printf("S");
+  }
 }
 
 void set_register(struct register_access reg, uint16_t value) {
   uint16_t *reg_ptr = &reg_table[reg.type - 1];
-  uint16_t old_value = *reg_ptr;
 
   switch (reg.byte) {
   case RegByte_Low: {
@@ -48,9 +88,6 @@ void set_register(struct register_access reg, uint16_t value) {
     *reg_ptr = value;
   } break;
   }
-
-  char *reg_name = get_register_name(reg);
-  printf(" %s:0x%x->0x%x", reg_name, old_value, *reg_ptr);
 }
 
 uint16_t get_reg_value(struct register_access reg) {
@@ -82,10 +119,8 @@ uint16_t get_value(struct operand op) {
   } break;
 
   case Operand_Immediate:
+  case Operand_RelativeImmediate:
     return op.immediate;
-
-  case Operand_RelativeImmediate: {
-  } break;
   }
 
   return 0;
@@ -112,26 +147,8 @@ void save_value(struct operand op, uint16_t value) {
   }
 }
 
-void print_flags_change(uint16_t old_flags, uint16_t new_flags) {
-  printf(" flags:");
-
-  if (old_flags & ZF)
-    printf("Z");
-
-  if (old_flags & SF)
-    printf("S");
-
-  printf("->");
-
-  if (new_flags & ZF)
-    printf("Z");
-
-  if (new_flags & SF)
-    printf("S");
-}
-
-void arithmetic_operation(struct instruction *instruction,
-                          struct operand destination, struct operand source) {
+int arithmetic_operation(struct instruction *instruction,
+                         struct operand destination, struct operand source) {
   uint16_t dv = get_value(destination);
   uint16_t sv = get_value(source);
   uint16_t v = 0;
@@ -154,10 +171,8 @@ void arithmetic_operation(struct instruction *instruction,
 
   default:
     printf("unknown arithmetic operation");
-    return;
+    return -1;
   }
-
-  uint16_t old_flags = op_flags;
 
   if (v == 0) {
     op_flags = op_flags | ZF;
@@ -171,14 +186,40 @@ void arithmetic_operation(struct instruction *instruction,
     op_flags = op_flags & ~SF;
   }
 
-  print_flags_change(old_flags, op_flags);
+  return 0;
 }
 
-void execute_instruction(struct instruction *instruction) {
+int handle_jump(struct instruction *instruction) {
+  switch (instruction->type) {
+  case INST_JNZ: {
+    if ((op_flags & ZF) == 0) {
+      int16_t addr = get_value(instruction->operand[0]);
+      ip += addr;
+    }
+  } break;
+
+  default:
+    printf("unknown jump operation");
+    return -1;
+  }
+
+  return 0;
+}
+
+void update_state() {
+  for (int i = 0; i < 8; ++i) {
+    original_reg_table[i] = reg_table[i];
+  }
+
+  original_ip = ip;
+  original_op_flags = op_flags;
+}
+
+ssize_t execute_instruction(struct instruction *instruction) {
   struct operand destination = instruction->operand[0];
   struct operand source = instruction->operand[1];
 
-  printf(" ;");
+  ip += instruction->bsize;
 
   switch (instruction->type) {
   case INST_MOV: {
@@ -188,11 +229,23 @@ void execute_instruction(struct instruction *instruction) {
   case INST_ADD:
   case INST_SUB:
   case INST_CMP:
-    arithmetic_operation(instruction, destination, source);
+    if (arithmetic_operation(instruction, destination, source) < 0) {
+      return -1;
+    };
+    break;
+
+  case INST_JNZ:
+    if (handle_jump(instruction) < 0) {
+      return -1;
+    }
     break;
 
   default:
     printf("unsupported instruction\n");
-    return;
+    return -1;
   }
+
+  print_executinon_change();
+  update_state();
+  return ip;
 }

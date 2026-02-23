@@ -123,6 +123,7 @@ struct instruction {
   enum instruction_type type;
   enum instruction_flag flags;
   struct operand operand[2];
+  uint8_t bsize; /* size of instruction in bytes */
 };
 
 #endif
