@@ -1,6 +1,6 @@
 #include "decode.h"
+#include "imemory.h"
 #include "instruction.h"
-#include "memory.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -247,11 +247,11 @@ enum effective_address_type get_effective_address_type(uint8_t index,
   return ea_table[index];
 }
 
-bool decode_instruction(mem_t *mem, uint8_t ip, struct instruction *inst) {
+bool decode_instruction(imem_t *imem, uint8_t ip, struct instruction *inst) {
   uint8_t buf[2];
   uint8_t ipo = ip; /* instruction pointer with offset */
 
-  if ((mem_readn(mem, ipo, buf, 1)) <= 0) {
+  if ((imem_readn(imem, ipo, buf, 1)) <= 0) {
     return false;
   }
   ipo += 1;
@@ -260,7 +260,7 @@ bool decode_instruction(mem_t *mem, uint8_t ip, struct instruction *inst) {
   struct instruction_encoding inst_encoding = instructions[buf[0]];
 
   if (inst_encoding.size == WORD) {
-    ipo += mem_readn(mem, ipo, buf, 1);
+    ipo += imem_readn(imem, ipo, buf, 1);
     inst->bsize++;
   }
 
@@ -308,12 +308,12 @@ bool decode_instruction(mem_t *mem, uint8_t ip, struct instruction *inst) {
       uint8_t is_direct_address = rm_op->memory.type == EffectiveAddress_Direct;
 
       if (mod == MOD_MEM8) {
-        ipo += mem_readn(mem, ipo, buf, 1);
+        ipo += imem_readn(imem, ipo, buf, 1);
         inst->bsize++;
         rm_op->memory.displacement = (int8_t)buf[0];
 
       } else if (mod == MOD_MEM16 || is_direct_address) {
-        ipo += mem_readn(mem, ipo, buf, 2);
+        ipo += imem_readn(imem, ipo, buf, 2);
         inst->bsize += 2;
         rm_op->memory.displacement = (buf[1] << 8) | buf[0];
       }
@@ -330,13 +330,13 @@ bool decode_instruction(mem_t *mem, uint8_t ip, struct instruction *inst) {
                         !(inst_encoding.fields & F_S);
 
   if (is_imm_wide) {
-    ipo += mem_readn(mem, ipo, buf, 2);
+    ipo += imem_readn(imem, ipo, buf, 2);
     inst->bsize += 2;
     imm_op->type = Operand_Immediate;
     imm_op->immediate = (buf[1] << 8) | buf[0];
 
   } else if (inst_encoding.fields & (DATA | DATA8)) {
-    ipo += mem_readn(mem, ipo, buf, 1);
+    ipo += imem_readn(imem, ipo, buf, 1);
     inst->bsize++;
     imm_op->type = Operand_Immediate;
 
@@ -349,7 +349,7 @@ bool decode_instruction(mem_t *mem, uint8_t ip, struct instruction *inst) {
   }
 
   if (inst_encoding.fields & ADDR) {
-    ipo += mem_readn(mem, ipo, buf, 1);
+    ipo += imem_readn(imem, ipo, buf, 1);
     inst->bsize++;
     imm_op->type = Operand_RelativeImmediate;
     imm_op->immediate = (int8_t)buf[0];

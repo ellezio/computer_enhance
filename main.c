@@ -8,8 +8,8 @@
 #include "decode.c"
 #include "display.c"
 #include "execute.c"
-#include "memory.c"
-#include "memory.h"
+#include "imemory.c"
+#include "imemory.h"
 
 int main(int argc, char **argv) {
   bool execute = false;
@@ -45,9 +45,9 @@ int main(int argc, char **argv) {
     printf("bits 16\n");
   }
 
-  mem_t mem = {0};
-  mem_init(&mem);
-  ssize_t cnt = mem_load_file(&mem, fd);
+  imem_t imem = {0};
+  imem_init(&imem);
+  ssize_t cnt = imem_load_file(&imem, fd);
   if (cnt < 0) {
     printf("error while loading file\n");
   }
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
   size_t ip = 0;
   while (ip < cnt) {
     struct instruction instruction = {0};
-    if (!decode_instruction(&mem, ip, &instruction)) {
+    if (!decode_instruction(&imem, ip, &instruction)) {
       break;
     }
 
@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
     printf("\n");
   }
 
-  mem_free(&mem);
+  imem_free(&imem);
 
   if (execute) {
     print_registers_state();

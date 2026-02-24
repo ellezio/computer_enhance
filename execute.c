@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <sys/types.h>
 
 /*
 0 - al, ah, ax
@@ -23,6 +24,8 @@ uint16_t original_op_flags = 0;
 
 uint16_t ip = 0;
 uint16_t original_ip = 0;
+
+uint8_t memory[65536] = {0};
 
 void print_registers_state() {
   printf("\nFinal registers:\n");
@@ -105,6 +108,40 @@ uint16_t get_reg_value(struct register_access reg) {
   }
 }
 
+uint16_t get_memory_value(struct effective_address memaddr) {
+  switch (memaddr.type) {
+  case EffectiveAddress_Direct: {
+    uint16_t value = memory[memaddr.displacement];
+    value |= memory[memaddr.displacement + 1] << 8;
+    return value;
+  }
+
+  case EffectiveAddress_BX: {
+    struct register_access bx_reg = {Reg_B, RegByte_All};
+    uint16_t bx_val = get_reg_value(bx_reg);
+    uint16_t value = memory[bx_val + memaddr.displacement];
+    value |= memory[bx_val + memaddr.displacement + 1] << 8;
+    return value;
+  }
+
+  case EffectiveAddress_BP_SI: {
+    uint16_t bp_val =
+        get_reg_value((struct register_access){Reg_BP, RegByte_All});
+    uint16_t si_val =
+        get_reg_value((struct register_access){Reg_SI, RegByte_All});
+
+    uint16_t value = memory[bp_val + si_val];
+    value |= memory[bp_val + si_val + 1] << 8;
+    return value;
+  } break;
+
+  default:
+    break;
+  }
+
+  return 0;
+}
+
 uint16_t get_value(struct operand op) {
   switch (op.type) {
 
@@ -116,6 +153,7 @@ uint16_t get_value(struct operand op) {
   } break;
 
   case Operand_Memory: {
+    return get_memory_value(op.memory);
   } break;
 
   case Operand_Immediate:
@@ -124,6 +162,35 @@ uint16_t get_value(struct operand op) {
   }
 
   return 0;
+}
+
+void store_to_memory(struct effective_address memaddr, uint16_t value) {
+  switch (memaddr.type) {
+  case EffectiveAddress_Direct: {
+    memory[memaddr.displacement] = value;
+    memory[memaddr.displacement + 1] = value >> 8;
+  } break;
+
+  case EffectiveAddress_BX: {
+    struct register_access bx_reg = {Reg_B, RegByte_All};
+    uint16_t bx_val = get_reg_value(bx_reg);
+    memory[bx_val + memaddr.displacement] = value;
+    memory[bx_val + memaddr.displacement + 1] = value >> 8;
+  } break;
+
+  case EffectiveAddress_BP_SI: {
+    uint16_t bp_val =
+        get_reg_value((struct register_access){Reg_BP, RegByte_All});
+    uint16_t si_val =
+        get_reg_value((struct register_access){Reg_SI, RegByte_All});
+
+    memory[bp_val + si_val] = value;
+    memory[bp_val + si_val + 1] = value >> 8;
+  } break;
+
+  default:
+    break;
+  }
 }
 
 void save_value(struct operand op, uint16_t value) {
@@ -137,6 +204,7 @@ void save_value(struct operand op, uint16_t value) {
   } break;
 
   case Operand_Memory: {
+    store_to_memory(op.memory, value);
   } break;
 
   case Operand_Immediate: {

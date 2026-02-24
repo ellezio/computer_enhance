@@ -1,4 +1,4 @@
-#include "memory.h"
+#include "imemory.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,33 +7,33 @@
 #define MEM_INIT_SIZE 1024
 #define MEM_GROW_SIZE 1024
 
-int mem_init(mem_t *mem) {
+int imem_init(imem_t *imem) {
   uint8_t *bytes = calloc(sizeof *bytes, MEM_INIT_SIZE);
   if (bytes == NULL) {
     return -1;
   }
-  mem->bytes = bytes;
-  mem->size = MEM_INIT_SIZE;
+  imem->bytes = bytes;
+  imem->size = MEM_INIT_SIZE;
   return 0;
 }
 
-int mem_grow(mem_t *mem) {
-  size_t new_size = mem->size + MEM_GROW_SIZE;
-  mem->bytes = realloc(mem->bytes, new_size);
-  if (mem->bytes == NULL) {
+int imem_grow(imem_t *imem) {
+  size_t new_size = imem->size + MEM_GROW_SIZE;
+  imem->bytes = realloc(imem->bytes, new_size);
+  if (imem->bytes == NULL) {
     return -1;
   }
-  mem->size = new_size;
+  imem->size = new_size;
   return 0;
 }
 
-void mem_free(mem_t *mem) {
-  free(mem->bytes);
-  mem->bytes = NULL;
-  mem->size = 0;
+void imem_free(imem_t *imem) {
+  free(imem->bytes);
+  imem->bytes = NULL;
+  imem->size = 0;
 }
 
-ssize_t mem_load_file(mem_t *mem, FILE *f) {
+ssize_t imem_load_file(imem_t *mem, FILE *f) {
   uint8_t buf[BUF_SIZE];
   size_t rb = 0, offset = 0;
   while ((rb = fread(buf, 1, BUF_SIZE, f)) != 0) {
@@ -51,18 +51,18 @@ ssize_t mem_load_file(mem_t *mem, FILE *f) {
   return offset;
 }
 
-ssize_t mem_readn(mem_t *mem, size_t addr, uint8_t *buf, size_t n) {
-  if (addr >= mem->size) {
+ssize_t imem_readn(imem_t *imem, size_t addr, uint8_t *buf, size_t n) {
+  if (addr >= imem->size) {
     return -1;
   }
 
-  if (addr + n > mem->size) {
-    n = mem->size - addr;
+  if (addr + n > imem->size) {
+    n = imem->size - addr;
   }
 
   int i = 0;
   for (; i < n; ++i) {
-    buf[i] = mem->bytes[addr + i];
+    buf[i] = imem->bytes[addr + i];
   }
 
   return i;
