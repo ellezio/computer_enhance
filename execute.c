@@ -1,5 +1,6 @@
 #include "display.h"
 #include "instruction.h"
+#include "memory.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -24,8 +25,6 @@ uint16_t original_op_flags = 0;
 
 uint16_t ip = 0;
 uint16_t original_ip = 0;
-
-uint8_t memory[65536] = {0};
 
 void print_registers_state() {
   printf("\nFinal registers:\n");
@@ -111,17 +110,13 @@ uint16_t get_reg_value(struct register_access reg) {
 uint16_t get_memory_value(struct effective_address memaddr) {
   switch (memaddr.type) {
   case EffectiveAddress_Direct: {
-    uint16_t value = memory[memaddr.displacement];
-    value |= memory[memaddr.displacement + 1] << 8;
-    return value;
+    return mem_read_word(memaddr.displacement);
   }
 
   case EffectiveAddress_BX: {
     struct register_access bx_reg = {Reg_B, RegByte_All};
     uint16_t bx_val = get_reg_value(bx_reg);
-    uint16_t value = memory[bx_val + memaddr.displacement];
-    value |= memory[bx_val + memaddr.displacement + 1] << 8;
-    return value;
+    return mem_read_word(bx_val + memaddr.displacement);
   }
 
   case EffectiveAddress_BP_SI: {
@@ -130,9 +125,7 @@ uint16_t get_memory_value(struct effective_address memaddr) {
     uint16_t si_val =
         get_reg_value((struct register_access){Reg_SI, RegByte_All});
 
-    uint16_t value = memory[bp_val + si_val];
-    value |= memory[bp_val + si_val + 1] << 8;
-    return value;
+    return mem_read_word(bp_val + si_val);
   } break;
 
   default:
@@ -167,15 +160,19 @@ uint16_t get_value(struct operand op) {
 void store_to_memory(struct effective_address memaddr, uint16_t value) {
   switch (memaddr.type) {
   case EffectiveAddress_Direct: {
-    memory[memaddr.displacement] = value;
-    memory[memaddr.displacement + 1] = value >> 8;
+    mem_save_word(memaddr.displacement, value);
   } break;
 
   case EffectiveAddress_BX: {
     struct register_access bx_reg = {Reg_B, RegByte_All};
     uint16_t bx_val = get_reg_value(bx_reg);
-    memory[bx_val + memaddr.displacement] = value;
-    memory[bx_val + memaddr.displacement + 1] = value >> 8;
+    mem_save_word(bx_val + memaddr.displacement, value);
+  } break;
+
+  case EffectiveAddress_BP: {
+    struct register_access bp_reg = {Reg_BP, RegByte_All};
+    uint16_t bp_val = get_reg_value(bp_reg);
+    mem_save_word(bp_val + memaddr.displacement, value);
   } break;
 
   case EffectiveAddress_BP_SI: {
@@ -184,8 +181,7 @@ void store_to_memory(struct effective_address memaddr, uint16_t value) {
     uint16_t si_val =
         get_reg_value((struct register_access){Reg_SI, RegByte_All});
 
-    memory[bp_val + si_val] = value;
-    memory[bp_val + si_val + 1] = value >> 8;
+    mem_save_word(bp_val + si_val, value);
   } break;
 
   default:
