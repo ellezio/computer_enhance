@@ -1,6 +1,9 @@
+#include "execute.h"
+#include "clocks.h"
 #include "display.h"
 #include "instruction.h"
 #include "memory.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -26,6 +29,8 @@ uint16_t original_op_flags = 0;
 uint16_t ip = 0;
 uint16_t original_ip = 0;
 
+uint16_t total_clocks = 0;
+
 void print_registers_state() {
   printf("\nFinal registers:\n");
 
@@ -41,8 +46,18 @@ void print_registers_state() {
   printf("\tip: 0x%x (%d)\n", ip, ip);
 }
 
-void print_executinon_change() {
+void print_executinon_change(struct instruction_timing *timing) {
   printf(" ;");
+
+  if (timing != NULL) {
+    // NOTE:
+    // Range is omited because currently I do not implemented instruction that
+    // have ranged clocks
+    printf(" Clocks: +%d = %d", timing->min, total_clocks);
+    if (timing->ea != 0)
+      printf(" (%d + %dea)", timing->base_min, timing->ea);
+    printf(" |");
+  }
 
   for (int i = 0; i < 8; ++i) {
     if (original_reg_table[i] != reg_table[i]) {
@@ -211,65 +226,6 @@ void save_value(struct operand op, uint16_t value) {
   }
 }
 
-int arithmetic_operation(struct instruction *instruction,
-                         struct operand destination, struct operand source) {
-  uint16_t dv = get_value(destination);
-  uint16_t sv = get_value(source);
-  uint16_t v = 0;
-
-  switch (instruction->type) {
-
-  case INST_ADD: {
-    v = dv + sv;
-    save_value(destination, v);
-  } break;
-
-  case INST_SUB: {
-    v = dv - sv;
-    save_value(destination, v);
-  } break;
-
-  case INST_CMP: {
-    v = dv - sv;
-  } break;
-
-  default:
-    printf("unknown arithmetic operation");
-    return -1;
-  }
-
-  if (v == 0) {
-    op_flags = op_flags | ZF;
-  } else {
-    op_flags = op_flags & ~ZF;
-  }
-
-  if (v & 0x8000) {
-    op_flags = op_flags | SF;
-  } else {
-    op_flags = op_flags & ~SF;
-  }
-
-  return 0;
-}
-
-int handle_jump(struct instruction *instruction) {
-  switch (instruction->type) {
-  case INST_JNZ: {
-    if ((op_flags & ZF) == 0) {
-      int16_t addr = get_value(instruction->operand[0]);
-      ip += addr;
-    }
-  } break;
-
-  default:
-    printf("unknown jump operation");
-    return -1;
-  }
-
-  return 0;
-}
-
 void update_state() {
   for (int i = 0; i < 8; ++i) {
     original_reg_table[i] = reg_table[i];
@@ -279,37 +235,76 @@ void update_state() {
   original_op_flags = op_flags;
 }
 
-ssize_t execute_instruction(struct instruction *instruction) {
+void update_flags(uint16_t value, uint16_t width) {
+  uint16_t signBit = width == 1 ? 1 << 7 : 1 << 15;
+
+  op_flags = 0;
+  op_flags |= value == 0 ? ZF : 0;
+  op_flags |= value & signBit ? SF : 0;
+}
+
+uint16_t mask_value(uint16_t value, uint16_t width) {
+  return value & (width == 1 ? 0xff : 0xffff);
+}
+
+struct execute_result execute_instruction(struct instruction *instruction) {
+  struct execute_result result = {};
+  struct timing_state state = {};
   struct operand destination = instruction->operand[0];
   struct operand source = instruction->operand[1];
 
   ip += instruction->bsize;
+  result.next_ip = ip;
+
+  uint16_t width = instruction->flags & F_W ? 2 : 1;
+  uint16_t value_dst = get_value(destination);
+  uint16_t value_src = get_value(source);
 
   switch (instruction->type) {
   case INST_MOV: {
-    save_value(destination, get_value(source));
+    save_value(destination, value_src);
   } break;
 
-  case INST_ADD:
-  case INST_SUB:
-  case INST_CMP:
-    if (arithmetic_operation(instruction, destination, source) < 0) {
-      return -1;
-    };
-    break;
+  case INST_ADD: {
+    uint16_t v = mask_value(
+        mask_value(value_dst, width) + mask_value(value_src, width), width);
 
-  case INST_JNZ:
-    if (handle_jump(instruction) < 0) {
-      return -1;
+    update_flags(v, width);
+    save_value(destination, v);
+  } break;
+
+  case INST_SUB: {
+    uint16_t v = mask_value(
+        mask_value(value_dst, width) - mask_value(value_src, width), width);
+
+    update_flags(v, width);
+    save_value(destination, v);
+  } break;
+
+  case INST_CMP: {
+    uint16_t v = mask_value(
+        mask_value(value_dst, width) - mask_value(value_src, width), width);
+
+    update_flags(v, width);
+  } break;
+
+  case INST_JNZ: {
+    if ((op_flags & ZF) == 0) {
+      int16_t addr = get_value(instruction->operand[0]);
+      ip += addr;
     }
-    break;
+  } break;
 
   default:
     printf("unsupported instruction\n");
-    return -1;
+    result.unimplemented = true;
+    return result;
   }
 
-  print_executinon_change();
+  result.timing = get_timing(instruction, &state);
+  total_clocks += result.timing.min;
+  print_executinon_change(&result.timing);
   update_state();
-  return ip;
+
+  return result;
 }

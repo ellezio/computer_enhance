@@ -5,9 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "clocks.c"
+#include "clocks.h"
 #include "decode.c"
 #include "display.c"
 #include "execute.c"
+#include "execute.h"
 #include "memory.c"
 #include "memory.h"
 
@@ -68,10 +71,8 @@ int main(int argc, char **argv) {
     print_instruction(&instruction);
 
     if (execute) {
-      ip = execute_instruction(&instruction);
-      if (ip < 0) {
-        break;
-      }
+      struct execute_result exec_result = execute_instruction(&instruction);
+      ip = exec_result.next_ip;
     } else {
       ip += instruction.bsize;
     }
