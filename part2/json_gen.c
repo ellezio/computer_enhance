@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 typedef struct randctx {
   uint64_t a;
@@ -32,24 +33,34 @@ double rand_in_range(randctx *ctx, double min, double max) {
   return (1.0 - t) * min + t * max;
 }
 
-int main() {
-  randctx ctx = {0};
-  rand_init(&ctx, 76915237468);
+int main(int argc, char **argv) {
+  if (argc != 3) {
+    fprintf(stderr, "usage: %s <seed> <count>\n", argv[0]);
+    exit(1);
+  }
 
-  FILE *f = fopen("points.json", "w");
+  int seed = atoi(argv[1]);
+  int count = atoi(argv[2]);
+
+  randctx ctx = {0};
+  rand_init(&ctx, seed);
+
+  char fname[100];
+  sprintf(fname, "points-%d.json", count);
+  FILE *f = fopen(fname, "w");
   if (f == NULL) {
     fprintf(stderr, "can't open \"points.json\"");
     return 1;
   }
 
   fprintf(f, "{\"pairs\": [\n");
-  for (int i = 0; i < 100; ++i) {
+  for (int i = 0; i < count; ++i) {
     double lat0 = rand_in_range(&ctx, -90, 90);
     double lon0 = rand_in_range(&ctx, -180, 180);
     double lat1 = rand_in_range(&ctx, -90, 90);
     double lon1 = rand_in_range(&ctx, -180, 180);
     char *sep = ",\n";
-    if (i == 99) {
+    if (i == count - 1) {
       sep = "\n";
     }
 
