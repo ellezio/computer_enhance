@@ -1,3 +1,4 @@
+#include "haversine_formula.c"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,14 +47,24 @@ int main(int argc, char **argv) {
   rand_init(&ctx, seed);
 
   char fname[100];
-  sprintf(fname, "points-%d.json", count);
-  FILE *f = fopen(fname, "w");
-  if (f == NULL) {
-    fprintf(stderr, "can't open \"points.json\"");
+  sprintf(fname, "%d-points.json", count);
+  FILE *json_file = fopen(fname, "w");
+  if (json_file == NULL) {
+    fprintf(stderr, "can't open \"%d-points.json\"", count);
     return 1;
   }
 
-  fprintf(f, "{\"pairs\": [\n");
+  sprintf(fname, "%d-answer.f64", count);
+  FILE *answer_file = fopen(fname, "w");
+  if (answer_file == NULL) {
+    fprintf(stderr, "can't open \"%d-answer.json\"", count);
+    return 1;
+  }
+
+  double sum = 0;
+  double sum_coef = 1.0 / count;
+
+  fprintf(json_file, "{\"pairs\": [\n");
   for (int i = 0; i < count; ++i) {
     double lat0 = rand_in_range(&ctx, -90, 90);
     double lon0 = rand_in_range(&ctx, -180, 180);
@@ -64,11 +75,22 @@ int main(int argc, char **argv) {
       sep = "\n";
     }
 
-    fprintf(
-        f,
-        "  {\"lat0\":%.16f, \"lon0\":%.16f, \"lat1\":%.16f, \"lon1\":%.16f}%s",
-        lat0, lon0, lat1, lon1, sep);
+    double earth_radius = 6372.8;
+    double hav = reference_haversine(lon0, lat0, lon1, lat1, earth_radius);
+    sum += hav * sum_coef;
+
+    fprintf(json_file,
+            "  {\"lat0\":%.16f, \"lon0\":%.16f, \"lat1\":%.16f, "
+            "\"lon1\":%.16f}%s",
+            lat0, lon0, lat1, lon1, sep);
   }
-  fprintf(f, "]}\n");
-  fclose(f);
+  fprintf(json_file, "]}\n");
+  fwrite(&sum, sizeof(sum), 1, answer_file);
+
+  fclose(json_file);
+  fclose(answer_file);
+
+  fprintf(stdout, "Random seed: %d\n", seed);
+  fprintf(stdout, "Pair count: %d\n", count);
+  fprintf(stdout, "Expected sum: %.16f\n", sum);
 }

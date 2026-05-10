@@ -3,27 +3,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/stat.h>
-
-struct buffer {
-  size_t size;
-  char *data;
-};
-
-bool buffer_is_equal(struct buffer b1, struct buffer b2) {
-  if (b1.size != b2.size) {
-    return false;
-  }
-
-  for (int i = 0; i < b1.size; ++i) {
-    if (b1.data[i] != b2.data[i]) {
-      return false;
-    }
-  }
-
-  return true;
-}
+#include <sys/types.h>
 
 enum json_token_type {
   TOKEN_ERROR,
@@ -305,4 +286,82 @@ struct json_element *parse_json(struct buffer input) {
   struct json_element *element =
       parse_json_element(&parser, (struct buffer){}, get_json_token(&parser));
   return element;
+}
+
+struct json_element *lookup_element(struct json_element *root_element,
+                                    struct buffer label) {
+  struct json_element *element = root_element->first_sub_element;
+  for (; element != NULL && !buffer_is_equal(element->label, label);
+       element = element->next_element) {
+  }
+
+  return element;
+}
+
+double convert_element_to_double(struct json_element *element) {
+  int index = 0;
+  double result = 0.0;
+  struct buffer value = element->value;
+  double sign = 1.0;
+
+  if (index < value.size && value.data[index] == '-') {
+    sign = -1.0;
+    ++index;
+  }
+
+  for (; index < value.size && value.data[index] != '.'; ++index) {
+    int64_t integer = value.data[index] - '0';
+    if (integer > 9) {
+      return 0;
+    }
+
+    result = result * 10 + integer;
+  }
+
+  if (index < value.size && value.data[index] == '.') {
+    // we go over the '.' to fractions
+    ++index;
+
+    double coef = 1.0 / 10.0;
+    for (; index < value.size; ++index) {
+      double fraction = value.data[index] - '0';
+      if (fraction > 9) {
+        break;
+      }
+
+      result += fraction * coef;
+      coef *= 1.0 / 10.0;
+    }
+  }
+
+  return sign * result;
+}
+
+uint64_t parse_haversine_json_pairs(struct buffer input,
+                                    struct haversine_pair *pairs) {
+  uint64_t pairs_count = 0;
+  struct json_element *json = parse_json(input);
+  struct json_element *json_pairs =
+      lookup_element(json, CONSTANT_STRING("pairs"));
+  if (pairs == NULL) {
+    return pairs_count;
+  }
+
+  for (struct json_element *element = json_pairs->first_sub_element;
+       element != NULL; element = element->next_element) {
+    struct haversine_pair *pair = pairs + pairs_count;
+
+    pair->lat0 = convert_element_to_double(
+        lookup_element(element, CONSTANT_STRING("lat0")));
+    pair->lon0 = convert_element_to_double(
+        lookup_element(element, CONSTANT_STRING("lon0")));
+    pair->lat1 = convert_element_to_double(
+        lookup_element(element, CONSTANT_STRING("lat1")));
+    pair->lon1 = convert_element_to_double(
+        lookup_element(element, CONSTANT_STRING("lon1")));
+
+    ++pairs_count;
+  }
+
+  return pairs_count;
 }
