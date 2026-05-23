@@ -62,6 +62,8 @@ void parse_json_keyword(struct buffer source, uint64_t *at,
 }
 
 struct json_token get_json_token(struct json_parser *parser) {
+  TIME_FUNCTION
+
   struct buffer source = parser->source;
   uint64_t at = parser->at;
 
@@ -204,6 +206,7 @@ struct json_element *parse_json_list(struct json_parser *parser,
 struct json_element *parse_json_element(struct json_parser *parser,
                                         struct buffer label,
                                         struct json_token token) {
+  TIME_FUNCTION
 
   struct json_element *sub_element = 0;
 
@@ -227,6 +230,8 @@ struct json_element *parse_json_element(struct json_parser *parser,
 struct json_element *parse_json_list(struct json_parser *parser,
                                      enum json_token_type end_type,
                                      bool hasLabels) {
+  TIME_FUNCTION
+
   struct json_element *first_element = {};
   struct json_element *last_element = {};
 
@@ -339,13 +344,17 @@ double convert_element_to_double(struct json_element *element) {
 
 uint64_t parse_haversine_json_pairs(struct buffer input,
                                     struct haversine_pair *pairs) {
+  TIME_FUNCTION
+
   uint64_t pairs_count = 0;
   struct json_element *json = parse_json(input);
   struct json_element *json_pairs =
       lookup_element(json, CONSTANT_STRING("pairs"));
-  if (pairs == NULL) {
+  if (json_pairs == NULL) {
     return pairs_count;
   }
+
+  // TIME_BLOCK("Lookup and Convert")
 
   for (struct json_element *element = json_pairs->first_sub_element;
        element != NULL; element = element->next_element) {

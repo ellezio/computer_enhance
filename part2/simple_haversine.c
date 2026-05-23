@@ -10,10 +10,11 @@ struct haversine_pair {
   double lon1;
 };
 
+#include "metrics.c"
+
 #include "buffer.c"
 #include "haversine_formula.c"
 #include "json_parse.c"
-#include "metrics.c"
 
 struct prof {
   uint64_t startup;
@@ -44,7 +45,9 @@ void prof_print(struct prof prof) {
          (double)prof.misc_output / total);
 }
 
-struct buffer read_flie(char *filename) {
+struct buffer read_file(char *filename) {
+  TIME_FUNCTION
+
   FILE *file = fopen(filename, "rb");
   if (file == NULL) {
     fprintf(stderr, "ERROR: failed to open file %s", filename);
@@ -73,6 +76,8 @@ struct buffer read_flie(char *filename) {
 }
 
 double sum_haversine_distance(struct haversine_pair *pairs, uint64_t count) {
+  TIME_FUNCTION
+
   double sum = 0;
   double sum_coef = 1.0 / count;
   double earth_radius = 6372.8;
@@ -88,6 +93,8 @@ double sum_haversine_distance(struct haversine_pair *pairs, uint64_t count) {
 }
 
 int main(int argc, char **args) {
+  begin_profiling();
+
   struct prof prof = {};
 
   uint64_t start = read_cpu_timer();
@@ -96,7 +103,7 @@ int main(int argc, char **args) {
   prof.startup = end - start;
 
   start = read_cpu_timer();
-  struct buffer json = read_flie(filename);
+  struct buffer json = read_file(filename);
   end = read_cpu_timer();
   prof.read = end - start;
 
@@ -121,12 +128,14 @@ int main(int argc, char **args) {
   end = read_cpu_timer();
   prof.sum = end - start;
 
-  start = read_cpu_timer();
-  printf("input size: %lu\n", json.size);
-  printf("pair count: %lu\n", pairs_count);
-  printf("haversine sum: %.16f\n\n", sum);
-  end = read_cpu_timer();
-  prof.misc_output = end - start;
-
-  prof_print(prof);
+  // start = read_cpu_timer();
+  // printf("input size: %lu\n", json.size);
+  // printf("pair count: %lu\n", pairs_count);
+  // printf("haversine sum: %.16f\n\n", sum);
+  // end = read_cpu_timer();
+  // prof.misc_output = end - start;
+  //
+  end_profiling();
+  // printf("\n");
+  // prof_print(prof);
 }
