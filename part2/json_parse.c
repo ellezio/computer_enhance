@@ -62,8 +62,6 @@ void parse_json_keyword(struct buffer source, uint64_t *at,
 }
 
 struct json_token get_json_token(struct json_parser *parser) {
-  TIME_FUNCTION
-
   struct buffer source = parser->source;
   uint64_t at = parser->at;
 
@@ -230,8 +228,6 @@ struct json_element *parse_json_element(struct json_parser *parser,
 struct json_element *parse_json_list(struct json_parser *parser,
                                      enum json_token_type end_type,
                                      bool hasLabels) {
-  TIME_FUNCTION
-
   struct json_element *first_element = {};
   struct json_element *last_element = {};
 

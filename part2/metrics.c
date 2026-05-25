@@ -37,12 +37,9 @@ uint64_t estimate_cpu_freq() {
 }
 
 struct measure_point {
-  uint64_t elapsed;
-  // uint64_t children_elapsed;
   uint64_t hit_count;
-  uint64_t call_stack_counter;
-  uint64_t acc_elapsed;
-  uint64_t acc_children_elapsed;
+  uint64_t exclusive_elapsed;
+  uint64_t inclusive_elapsed;
   const char *label;
 };
 
@@ -52,9 +49,10 @@ struct profiler {
   uint64_t end;
 };
 static struct profiler s_profiler = {};
-static uint64_t s_current_point_index = 0;
+uint64_t g_current_point_index = 0;
 
 struct time_block {
+  uint64_t old_elapsed;
   uint64_t start;
   size_t point_index;
   uint64_t parent_index;
@@ -63,14 +61,14 @@ struct time_block {
 struct time_block new_time_block(const char *label, uint64_t point_index) {
   struct measure_point *point = s_profiler.points + point_index;
   point->label = label;
-  ++point->call_stack_counter;
   ++point->hit_count;
 
   struct time_block tb = {
+      .old_elapsed = point->inclusive_elapsed,
       .point_index = point_index,
-      .parent_index = s_current_point_index,
+      .parent_index = g_current_point_index,
   };
-  s_current_point_index = point_index;
+  g_current_point_index = point_index;
 
   tb.start = read_cpu_timer();
   return tb;
@@ -92,20 +90,12 @@ void cleanup(struct time_block *tb) {
   struct measure_point *point = s_profiler.points + tb->point_index;
 
   if (tb->point_index != tb->parent_index) {
-    parent->acc_children_elapsed += elapsed;
-    point->acc_elapsed += elapsed;
-
-    // if (parent->call_stack_counter == 1) {
-    //   parent->children_elapsed += elapsed;
-    // }
-
-    if (point->call_stack_counter == 1) {
-      point->elapsed += elapsed;
-    }
+    parent->exclusive_elapsed -= elapsed;
+    point->exclusive_elapsed += elapsed;
+    point->inclusive_elapsed = tb->old_elapsed + elapsed;
   }
 
-  --point->call_stack_counter;
-  s_current_point_index = tb->parent_index;
+  g_current_point_index = tb->parent_index;
 }
 
 void print_profiler() {
@@ -113,12 +103,12 @@ void print_profiler() {
   for (size_t i = 0;
        i < (sizeof(s_profiler.points) / sizeof(*s_profiler.points)); ++i) {
     struct measure_point *mp = s_profiler.points + i;
-    if (mp->elapsed) {
-      printf("%s[%lu]: %lu (%.2f%%", mp->label, mp->hit_count, mp->elapsed,
-             (double)(mp->acc_elapsed - mp->acc_children_elapsed) / total);
+    if (mp->inclusive_elapsed) {
+      printf("%s[%lu]: %lu (%.2f%%", mp->label, mp->hit_count,
+             mp->inclusive_elapsed, (double)(mp->exclusive_elapsed) / total);
 
-      if (mp->acc_children_elapsed) {
-        printf(", w/children %.2f%%", (double)mp->elapsed / total);
+      if (mp->inclusive_elapsed != mp->exclusive_elapsed) {
+        printf(", w/children %.2f%%", (double)mp->inclusive_elapsed / total);
       }
 
       printf(")\n");
