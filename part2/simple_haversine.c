@@ -64,10 +64,13 @@ struct buffer read_file(char *filename) {
   }
   buffer.size = stat_.st_size;
 
-  if (fread(buffer.data, buffer.size, 1, file) != 1) {
-    fprintf(stderr, "ERROR: failed to read file");
-    free(buffer.data);
-    buffer = (struct buffer){};
+  {
+    TIME_BANDWIDTH("fread", buffer.size)
+    if (fread(buffer.data, buffer.size, 1, file) != 1) {
+      fprintf(stderr, "ERROR: failed to read file");
+      free(buffer.data);
+      buffer = (struct buffer){};
+    }
   }
 
   fclose(file);
@@ -76,7 +79,7 @@ struct buffer read_file(char *filename) {
 }
 
 double sum_haversine_distance(struct haversine_pair *pairs, uint64_t count) {
-  TIME_FUNCTION
+  TIME_BANDWIDTH(__func__, count * sizeof(struct haversine_pair))
 
   double sum = 0;
   double sum_coef = 1.0 / count;

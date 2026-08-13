@@ -41,19 +41,19 @@ struct json_parser {
 };
 
 bool is_json_whitespace(char ch) {
-  TIME_FUNCTION
+  // TIME_FUNCTION
   return ((ch == ' ') || (ch == '\n') || (ch == '\r') || (ch == '\t'));
 }
 
 bool is_json_digit(char ch) {
-  TIME_FUNCTION
+  // TIME_FUNCTION
   return ch >= '0' && ch <= '9';
 }
 
 void parse_json_keyword(struct buffer source, uint64_t *at,
                         struct json_token *result, struct buffer remaining,
                         enum json_token_type type) {
-  TIME_FUNCTION
+  // TIME_FUNCTION
   if (source.size - *at >= remaining.size) {
     struct buffer origin = source;
     origin.data += *at;
@@ -67,7 +67,7 @@ void parse_json_keyword(struct buffer source, uint64_t *at,
 }
 
 struct json_token get_json_token(struct json_parser *parser) {
-  TIME_FUNCTION
+  // TIME_FUNCTION
   struct buffer source = parser->source;
   uint64_t at = parser->at;
 
@@ -210,7 +210,7 @@ struct json_element *parse_json_list(struct json_parser *parser,
 struct json_element *parse_json_element(struct json_parser *parser,
                                         struct buffer label,
                                         struct json_token token) {
-  TIME_FUNCTION
+  // TIME_FUNCTION
 
   struct json_element *sub_element = 0;
 
@@ -234,7 +234,7 @@ struct json_element *parse_json_element(struct json_parser *parser,
 struct json_element *parse_json_list(struct json_parser *parser,
                                      enum json_token_type end_type,
                                      bool hasLabels) {
-  TIME_FUNCTION
+  // TIME_FUNCTION
   struct json_element *first_element = {};
   struct json_element *last_element = {};
 

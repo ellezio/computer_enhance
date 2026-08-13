@@ -7,7 +7,7 @@
 #include <x86intrin.h>
 
 #ifndef PROFILER
-#define PROFILER 0
+#define PROFILER 1
 #endif
 
 uint64_t read_cpu_timer() { return __rdtsc(); }
@@ -45,6 +45,7 @@ struct measure_point {
   uint64_t hit_count;
   uint64_t exclusive_elapsed;
   uint64_t inclusive_elapsed;
+  uint64_t processed_byte_count;
   const char *label;
 };
 
@@ -58,10 +59,12 @@ struct time_block {
   uint64_t parent_index;
 };
 
-struct time_block new_time_block(const char *label, uint64_t point_index) {
+struct time_block new_time_block(const char *label, uint64_t point_index,
+                                 uint64_t byte_count) {
   struct measure_point *point = profiler_points + point_index;
   point->label = label;
   ++point->hit_count;
+  point->processed_byte_count += byte_count;
 
   struct time_block tb = {
       .old_elapsed = point->inclusive_elapsed,
@@ -76,10 +79,10 @@ struct time_block new_time_block(const char *label, uint64_t point_index) {
 
 #define CONCAT2(a, b) a##b
 #define CONCAT(a, b) CONCAT2(a, b)
-#define TIME_BLOCK(name)                                                       \
+#define TIME_BANDWIDTH(name, byte_count)                                       \
   struct time_block CONCAT(Block, __LINE__)                                    \
       __attribute__((cleanup(cleanup))) =                                      \
-          new_time_block(name, __COUNTER__ + 1);
+          new_time_block(name, __COUNTER__ + 1, byte_count);
 
 void cleanup(struct time_block *tb) {
   uint64_t elapsed = read_cpu_timer() - tb->start;
@@ -110,15 +113,30 @@ void print_measure_points(uint64_t total_cpu_elapsed) {
                100.0 * (double)mp->inclusive_elapsed / total_cpu_elapsed);
       }
 
-      printf(")\n");
+      printf(")");
+
+      if (mp->processed_byte_count) {
+        double megabyte = 1024.0 * 1024.0;
+        double gigabyte = megabyte * 1024.0;
+
+        double seconds =
+            (double)mp->inclusive_elapsed / (double)estimate_cpu_freq();
+        double byte_per_second = (double)mp->processed_byte_count / seconds;
+        double megabytes = (double)mp->processed_byte_count / megabyte;
+        double gigabytes_per_second = byte_per_second / gigabyte;
+
+        printf(" %.3fmb at %.2fgb/s", megabytes, gigabytes_per_second);
+      }
+
+      printf("\n");
     }
   }
 }
 
 #else
 
+#define TIME_BANDWIDTH(...)
 #define print_measure_points(...)
-#define TIME_BLOCK(...)
 
 #endif
 
@@ -128,6 +146,7 @@ struct profiler {
 };
 static struct profiler s_profiler = {};
 
+#define TIME_BLOCK(name) TIME_BANDWIDTH(name, 0)
 #define TIME_FUNCTION TIME_BLOCK(__func__)
 
 void print_profiler() {
