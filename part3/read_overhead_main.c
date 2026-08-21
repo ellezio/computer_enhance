@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 
 struct test_function {
-  char *filename;
+  char *name;
   read_overhead_test_func *func;
 };
 
@@ -48,16 +48,20 @@ int main(int argc, char **argv) {
 
   int arr_count = sizeof(test_functions) / sizeof(*test_functions);
 
-  struct repetition_tester testers[arr_count] = {};
+  struct repetition_tester testers[arr_count][AllocType_count] = {};
 
   for (;;) {
     for (int func_index = 0; func_index < arr_count; ++func_index) {
-      struct repetition_tester *tester = testers + func_index;
-      struct test_function test_func = test_functions[func_index];
+      for (int alloc_type = 0; alloc_type < AllocType_count; ++alloc_type) {
+        struct repetition_tester *tester = &testers[func_index][alloc_type];
+        struct test_function test_func = test_functions[func_index];
+        params.alloc_type = alloc_type;
 
-      printf("\n--- %s ---\n", test_func.filename);
-      new_test_wave(tester, params.dest.size, cpu_time_freq, 0);
-      test_func.func(tester, &params);
+        printf("\n--- %s%s%s ---\n", describe_allocation_type(alloc_type),
+               alloc_type ? " + " : "", test_func.name);
+        new_test_wave(tester, params.dest.size, cpu_time_freq, 0);
+        test_func.func(tester, &params);
+      }
     }
   }
 
