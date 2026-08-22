@@ -15,6 +15,7 @@ struct test_function {
 };
 
 struct test_function test_functions[] = {
+    {"write_all_bytes", write_all_bytes},
     {"read", read_via_read},
     {"fread", read_via_fread},
 };

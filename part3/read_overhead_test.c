@@ -133,3 +133,21 @@ static void read_via_read(struct repetition_tester *tester,
     }
   }
 }
+
+static void write_all_bytes(struct repetition_tester *tester,
+                            struct read_params *params) {
+  while (is_testing(tester)) {
+    struct buffer buffer = params->dest;
+    handle_allocation(params, &buffer);
+
+    begin_time(tester);
+    for (uint64_t idx = 0; idx < buffer.size; ++idx) {
+      buffer.data[idx] = (uint8_t)idx;
+    }
+    end_time(tester);
+
+    count_bytes(tester, buffer.size);
+
+    handle_deallocation(params, &buffer);
+  }
+}

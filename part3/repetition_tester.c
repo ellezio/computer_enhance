@@ -8,11 +8,24 @@ enum test_mode : uint32_t {
   TestMode_Error,
 };
 
+enum repetition_value_type {
+  RepValue_TestCount,
+
+  RepValue_CPUTimer,
+  RepValue_MemPageFaults,
+  RepValue_ByteCount,
+
+  RepValue_Count,
+};
+
+struct repetition_value {
+  uint64_t E[RepValue_Count];
+};
+
 struct repetition_tester_results {
-  uint64_t test_count;
-  uint64_t total_time;
-  uint64_t min_time;
-  uint64_t max_time;
+  struct repetition_value total;
+  struct repetition_value min;
+  struct repetition_value max;
 };
 
 struct repetition_tester {
@@ -25,9 +38,8 @@ struct repetition_tester {
   bool print_new_minimums;
   uint32_t open_block_count;
   uint32_t close_block_count;
-  uint64_t time_accumulated_on_this_test;
-  uint64_t bytes_accumulated_on_this_test;
 
+  struct repetition_value accumulated_on_this_test;
   struct repetition_tester_results results;
 };
 
@@ -58,19 +70,45 @@ static void print_time(char const *label, double cpu_time,
   fflush(stdout);
 }
 
-static void print_results(struct repetition_tester_results results,
-                          uint64_t cpu_timer_freq, uint64_t byte_count) {
-  print_time("Min", (double)results.min_time, cpu_timer_freq, byte_count);
-  printf("\n");
+static void print_value(char const *label, struct repetition_value value,
+                        uint64_t cpu_timer_freq) {
+  uint64_t test_count = value.E[RepValue_TestCount];
+  double divisor = test_count ? (double)test_count : 1;
 
-  print_time("Max", (double)results.max_time, cpu_timer_freq, byte_count);
-  printf("\n");
-
-  if (results.test_count) {
-    print_time("Avg", (double)results.total_time / (double)results.test_count,
-               cpu_timer_freq, byte_count);
-    printf("\n");
+  double E[RepValue_Count] = {};
+  for (uint32_t E_index = 0; E_index < RepValue_Count; ++E_index) {
+    E[E_index] = (double)value.E[E_index] / divisor;
   }
+
+  printf("%s: %.0f", label, E[RepValue_CPUTimer]);
+  if (cpu_timer_freq) {
+    double seconds =
+        seconds_from_cpu_time(E[RepValue_CPUTimer], cpu_timer_freq);
+    printf("(%fms)", 1000.0f * seconds);
+
+    if (E[RepValue_ByteCount] > 0) {
+      double gigabyte = 1024.0f * 1024.0f * 1024.0f;
+      double bandwidth = E[RepValue_ByteCount] / (gigabyte * seconds);
+      printf(" %fgb/s", bandwidth);
+    }
+  }
+
+  if (E[RepValue_MemPageFaults] > 0) {
+    printf(" PF: %0.4f (%0.4fk/fault)", E[RepValue_MemPageFaults],
+           E[RepValue_ByteCount] / (E[RepValue_MemPageFaults] * 1024.0));
+  }
+}
+
+static void print_results(struct repetition_tester_results results,
+                          uint64_t cpu_timer_freq) {
+  print_value("Min", results.min, cpu_timer_freq);
+  printf("\n");
+
+  print_value("Max", results.max, cpu_timer_freq);
+  printf("\n");
+
+  print_value("Avg", results.total, cpu_timer_freq);
+  printf("\n");
 }
 
 static void error(struct repetition_tester *tester, char const *message) {
@@ -90,7 +128,7 @@ static void new_test_wave(struct repetition_tester *tester,
     tester->target_processed_byte_count = target_processed_byte_count;
     tester->cpu_timer_freq = cpu_timer_freq;
     tester->print_new_minimums = true;
-    tester->results.min_time = (uint64_t)-1;
+    tester->results.min.E[RepValue_CPUTimer] = (uint64_t)-1;
   } else if (tester->mode == TestMode_Completed) {
     tester->mode = TestMode_Testing;
 
@@ -109,16 +147,20 @@ static void new_test_wave(struct repetition_tester *tester,
 
 static void begin_time(struct repetition_tester *tester) {
   ++tester->open_block_count;
-  tester->time_accumulated_on_this_test -= read_cpu_timer();
+  tester->accumulated_on_this_test.E[RepValue_MemPageFaults] -=
+      read_os_page_fault_count();
+  tester->accumulated_on_this_test.E[RepValue_CPUTimer] -= read_cpu_timer();
 }
 
 static void end_time(struct repetition_tester *tester) {
   ++tester->close_block_count;
-  tester->time_accumulated_on_this_test += read_cpu_timer();
+  tester->accumulated_on_this_test.E[RepValue_MemPageFaults] +=
+      read_os_page_fault_count();
+  tester->accumulated_on_this_test.E[RepValue_CPUTimer] += read_cpu_timer();
 }
 
 static void count_bytes(struct repetition_tester *tester, uint64_t byte_count) {
-  tester->bytes_accumulated_on_this_test += byte_count;
+  tester->accumulated_on_this_test.E[RepValue_ByteCount] += byte_count;
 }
 
 static bool is_testing(struct repetition_tester *tester) {
@@ -130,23 +172,29 @@ static bool is_testing(struct repetition_tester *tester) {
         error(tester, "unbalanced begin_time/end_time");
       }
 
-      if (tester->bytes_accumulated_on_this_test !=
+      if (tester->accumulated_on_this_test.E[RepValue_ByteCount] !=
           tester->target_processed_byte_count) {
         error(tester, "processed byte count mismach");
       }
 
       if (tester->mode == TestMode_Testing) {
         struct repetition_tester_results *results = &tester->results;
-        uint64_t elapsed_time = tester->time_accumulated_on_this_test;
-        results->test_count += 1;
-        results->total_time += elapsed_time;
 
-        if (results->max_time < elapsed_time) {
-          results->max_time = elapsed_time;
+        tester->accumulated_on_this_test.E[RepValue_TestCount] = 1;
+        for (uint32_t E_index = 0; E_index < RepValue_Count; ++E_index) {
+          tester->results.total.E[E_index] +=
+              tester->accumulated_on_this_test.E[E_index];
         }
 
-        if (results->min_time > elapsed_time) {
-          results->min_time = elapsed_time;
+        uint64_t elapsed_time =
+            tester->accumulated_on_this_test.E[RepValue_CPUTimer];
+
+        if (results->max.E[RepValue_CPUTimer] < elapsed_time) {
+          results->max = tester->accumulated_on_this_test;
+        }
+
+        if (results->min.E[RepValue_CPUTimer] > elapsed_time) {
+          results->min = tester->accumulated_on_this_test;
 
           tester->test_started_at = current_time;
 
@@ -159,8 +207,7 @@ static bool is_testing(struct repetition_tester *tester) {
 
         tester->open_block_count = 0;
         tester->close_block_count = 0;
-        tester->time_accumulated_on_this_test = 0;
-        tester->bytes_accumulated_on_this_test = 0;
+        tester->accumulated_on_this_test = (struct repetition_value){};
       }
     }
 
@@ -168,8 +215,7 @@ static bool is_testing(struct repetition_tester *tester) {
       tester->mode = TestMode_Completed;
 
       printf("                                                          \r");
-      print_results(tester->results, tester->cpu_timer_freq,
-                    tester->target_processed_byte_count);
+      print_results(tester->results, tester->cpu_timer_freq);
     }
   }
 

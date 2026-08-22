@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <strings.h>
+#include <sys/resource.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <x86intrin.h>
@@ -18,6 +19,14 @@ uint64_t read_os_timer() {
   struct timeval tv;
   gettimeofday(&tv, 0);
   return tv.tv_sec * read_os_freq() + tv.tv_usec;
+}
+
+static uint64_t read_os_page_fault_count(void) {
+  struct rusage usage = {};
+  getrusage(RUSAGE_SELF, &usage);
+
+  uint64_t result = usage.ru_minflt + usage.ru_majflt;
+  return result;
 }
 
 uint64_t estimate_cpu_freq() {
