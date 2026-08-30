@@ -1,11 +1,16 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 enum allocation_type {
   AllocType_none,
   AllocType_malloc,
+  AllocType_mmap,
+  AllocType_mmapLargePages,
+
   AllocType_count,
 };
 
@@ -29,6 +34,14 @@ static char const *describe_allocation_type(enum allocation_type alloc_type) {
     result = "malloc";
   } break;
 
+  case AllocType_mmap: {
+    result = "mmap";
+  } break;
+
+  case AllocType_mmapLargePages: {
+    result = "mmap (large)";
+  } break;
+
   default: {
     result = "UNKNOWN";
   } break;
@@ -37,7 +50,8 @@ static char const *describe_allocation_type(enum allocation_type alloc_type) {
   return result;
 }
 
-static void handle_allocation(struct read_params *params,
+static void handle_allocation(struct repetition_tester *tester,
+                              struct read_params *params,
                               struct buffer *buffer) {
   switch (params->alloc_type) {
   case AllocType_none:
@@ -45,6 +59,27 @@ static void handle_allocation(struct read_params *params,
 
   case AllocType_malloc: {
     *buffer = allocate_buffer(params->dest.size);
+  }; break;
+
+  case AllocType_mmap:
+  case AllocType_mmapLargePages: {
+    int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+
+    if (params->alloc_type == AllocType_mmapLargePages) {
+      flags |= MAP_HUGETLB | MAP_HUGE_2MB;
+    }
+
+    uint8_t *alloc_data =
+        mmap(NULL, params->dest.size, PROT_READ | PROT_WRITE, flags, -1, 0);
+
+    if ((ssize_t)alloc_data >= 0) {
+      buffer->size = params->dest.size;
+      buffer->data = alloc_data;
+    } else {
+      error(tester, "allocation failed");
+      printf("errno = %d\n", errno);
+    }
+
   }; break;
 
   default: {
@@ -63,6 +98,16 @@ static void handle_deallocation(struct read_params *params,
     free_buffer(buffer);
   }; break;
 
+  case AllocType_mmap:
+  case AllocType_mmapLargePages: {
+    size_t alloc_size = buffer->size;
+    if (params->alloc_type == AllocType_mmapLargePages) {
+      int64_t page_size = (1 << 21);
+      alloc_size = (alloc_size + page_size - 1) & ~(page_size - 1);
+    }
+    munmap(buffer->data, alloc_size);
+  }; break;
+
   default: {
     fprintf(stderr, "ERROR: Unrecognized allocation type\n");
   } break;
@@ -75,7 +120,7 @@ static void read_via_fread(struct repetition_tester *tester,
     FILE *file = fopen(params->filename, "rb");
     if (file != NULL) {
       struct buffer dest_buffer = params->dest;
-      handle_allocation(params, &dest_buffer);
+      handle_allocation(tester, params, &dest_buffer);
 
       begin_time(tester);
       int result = fread(dest_buffer.data, dest_buffer.size, 1, file);
@@ -101,7 +146,7 @@ static void read_via_read(struct repetition_tester *tester,
     int fd = open(params->filename, O_RDONLY);
     if (fd > 0) {
       struct buffer dest_buffer = params->dest;
-      handle_allocation(params, &dest_buffer);
+      handle_allocation(tester, params, &dest_buffer);
 
       uint64_t remaining = dest_buffer.size;
       uint8_t *dest = dest_buffer.data;
@@ -138,7 +183,7 @@ static void write_all_bytes(struct repetition_tester *tester,
                             struct read_params *params) {
   while (is_testing(tester)) {
     struct buffer buffer = params->dest;
-    handle_allocation(params, &buffer);
+    handle_allocation(tester, params, &buffer);
 
     begin_time(tester);
     for (uint64_t idx = 0; idx < buffer.size; ++idx) {
