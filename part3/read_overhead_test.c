@@ -196,3 +196,74 @@ static void write_all_bytes(struct repetition_tester *tester,
     handle_deallocation(params, &buffer);
   }
 }
+
+#if WITH_ASM
+extern void MOVAllBytesASM(uint64_t size, char *data);
+extern void NOPAllBytesASM(uint64_t size);
+extern void CMPAllBytesASM(uint64_t size);
+extern void DECAllBytesASM(uint64_t size);
+
+static void MOVAllBytes(struct repetition_tester *tester,
+                        struct read_params *params) {
+  while (is_testing(tester)) {
+    struct buffer buffer = params->dest;
+    handle_allocation(tester, params, &buffer);
+
+    begin_time(tester);
+    MOVAllBytesASM(buffer.size, buffer.data);
+    end_time(tester);
+
+    count_bytes(tester, buffer.size);
+
+    handle_deallocation(params, &buffer);
+  }
+}
+
+static void NOPAllBytes(struct repetition_tester *tester,
+                        struct read_params *params) {
+  while (is_testing(tester)) {
+    struct buffer buffer = params->dest;
+    handle_allocation(tester, params, &buffer);
+
+    begin_time(tester);
+    NOPAllBytesASM(buffer.size);
+    end_time(tester);
+
+    count_bytes(tester, buffer.size);
+
+    handle_deallocation(params, &buffer);
+  }
+}
+
+static void CMPAllBytes(struct repetition_tester *tester,
+                        struct read_params *params) {
+  while (is_testing(tester)) {
+    struct buffer buffer = params->dest;
+    handle_allocation(tester, params, &buffer);
+
+    begin_time(tester);
+    CMPAllBytesASM(buffer.size);
+    end_time(tester);
+
+    count_bytes(tester, buffer.size);
+
+    handle_deallocation(params, &buffer);
+  }
+}
+
+static void DECAllBytes(struct repetition_tester *tester,
+                        struct read_params *params) {
+  while (is_testing(tester)) {
+    struct buffer buffer = params->dest;
+    handle_allocation(tester, params, &buffer);
+
+    begin_time(tester);
+    DECAllBytesASM(buffer.size);
+    end_time(tester);
+
+    count_bytes(tester, buffer.size);
+
+    handle_deallocation(params, &buffer);
+  }
+}
+#endif

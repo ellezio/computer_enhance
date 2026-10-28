@@ -2,6 +2,8 @@
 #include "metrics.c"
 #include "repetition_tester.c"
 
+#define WITH_ASM 0
+
 #include "read_overhead_test.c"
 
 #include <stdint.h>
@@ -16,6 +18,13 @@ struct test_function {
 
 struct test_function test_functions[] = {
     {"write_all_bytes", write_all_bytes},
+#if WITH_ASM
+    {"MOVAllBytes", MOVAllBytes},
+    {"NOPAllBytes", NOPAllBytes},
+    {"CMPAllBytes", CMPAllBytes},
+    {"DECAllBytes", DECAllBytes},
+#endif
+
     {"read", read_via_read},
     {"fread", read_via_fread},
 };
