@@ -1,5 +1,5 @@
 #include "buffer.c"
-#include "metrics.c"
+#include "platform.c"
 #include "repetition_tester.c"
 
 #define WITH_ASM 0

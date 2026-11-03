@@ -1,2 +1,1 @@
-a.out
-*.obj
+*[.o, .obj, .out]

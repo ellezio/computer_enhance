@@ -1,10 +1,11 @@
-#include <stddef.h>
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <strings.h>
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include <x86intrin.h>
 
 #ifndef PROFILER
@@ -47,6 +48,14 @@ uint64_t estimate_cpu_freq() {
   uint64_t cpu_freq = os_freq * cpu_elapsed / os_elapsed;
 
   return cpu_freq;
+}
+
+static bool read_os_random_bytes(struct buffer buffer) {
+  int dev_random = open("/dev/random", O_RDONLY);
+  ssize_t n = read(dev_random, buffer.data, buffer.size);
+  bool result = n == buffer.size;
+  close(dev_random);
+  return result;
 }
 
 #if PROFILER

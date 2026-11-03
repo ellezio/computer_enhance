@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 
-#include "metrics.c"
+#include "platform.c"
 
 int main(int argc, char **argv) {
   if (argc == 2) {

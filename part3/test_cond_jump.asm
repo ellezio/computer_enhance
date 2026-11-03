@@ -1,42 +1,16 @@
-global TESTJumpTakeJmp
-global TESTJumpNotTakeJmp
+global ConditionalNOP
 
 section .text
 
-TESTJumpTakeJmp:
+ConditionalNOP:
     xor rax, rax
 .loop:
-    cmp rax, rax
-    jz .after_nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-.after_nop:
-    inc rax
+    mov r10, [rsi + rax]
+	inc rax
+	test r10, 1
+    jnz .skip
+	nop
+.skip:
     cmp rax, rdi
     jb .loop
-
-TESTJumpNotTakeJmp:
-    xor rax, rax
-.loop:
-    cmp rax, rax
-    jb .after_nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-.after_nop:
-    inc rax
-    cmp rax, rdi
-    jb .loop
+    ret
