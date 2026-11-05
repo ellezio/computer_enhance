@@ -7,7 +7,8 @@
 
 #define NOP_LOOP 0
 #define MULTINOP_LOOPS 0
-#define TEST_COND_JUMP 1
+#define TEST_COND_JUMP 0
+#define READ_UNROLL 1
 
 #if NOP_LOOP
 extern void MOVAllBytesASM(uint64_t size, char *data);
@@ -26,6 +27,13 @@ extern void NOP1x9AllBytes(uint64_t size, char *data);
 extern void ConditionalNOP(uint64_t size, char *data);
 #endif
 
+#if READ_UNROLL
+extern void read_x1(uint64_t size, char *data);
+extern void read_x2(uint64_t size, char *data);
+extern void read_x3(uint64_t size, char *data);
+extern void read_x4(uint64_t size, char *data);
+#endif
+
 typedef void asm_func(uint64_t size, char *data);
 
 struct test_function {
@@ -35,17 +43,27 @@ struct test_function {
 
 struct test_function test_functions[] = {
 #if NOP_LOOP
-    {"MOVAllBytes", MOVAllBytes},       {"NOPAllBytes", NOPAllBytes},
-    {"CMPAllBytes", CMPAllBytes},       {"DECAllBytes", DECAllBytes},
+    {"MOVAllBytes", MOVAllBytes},
+    {"NOPAllBytes", NOPAllBytes},
+    {"CMPAllBytes", CMPAllBytes},
+    {"DECAllBytes", DECAllBytes},
 #endif
 
 #if MULTINOP_LOOPS
-    {"NOP3x1AllBytes", NOP3x1AllBytes}, {"NOP1x3AllBytes", NOP1x3AllBytes},
+    {"NOP3x1AllBytes", NOP3x1AllBytes},
+    {"NOP1x3AllBytes", NOP1x3AllBytes},
     {"NOP1x9AllBytes", NOP1x9AllBytes},
 #endif
 
 #if TEST_COND_JUMP
     {"ConditionalNOP", ConditionalNOP},
+#endif
+
+#if READ_UNROLL
+    {"read_x1", read_x1},
+    {"read_x2", read_x2},
+    {"read_x3", read_x3},
+    {"read_x4", read_x4},
 #endif
 };
 
