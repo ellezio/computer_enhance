@@ -8,7 +8,8 @@
 #define NOP_LOOP 0
 #define MULTINOP_LOOPS 0
 #define TEST_COND_JUMP 0
-#define READ_UNROLL 1
+#define READ_UNROLL 0
+#define WRITE_UNROLL 1
 
 #if NOP_LOOP
 extern void MOVAllBytesASM(uint64_t size, char *data);
@@ -32,6 +33,13 @@ extern void read_x1(uint64_t size, char *data);
 extern void read_x2(uint64_t size, char *data);
 extern void read_x3(uint64_t size, char *data);
 extern void read_x4(uint64_t size, char *data);
+#endif
+
+#if WRITE_UNROLL
+extern void write_x1(uint64_t size, char *data);
+extern void write_x2(uint64_t size, char *data);
+extern void write_x3(uint64_t size, char *data);
+extern void write_x4(uint64_t size, char *data);
 #endif
 
 typedef void asm_func(uint64_t size, char *data);
@@ -64,6 +72,13 @@ struct test_function test_functions[] = {
     {"read_x2", read_x2},
     {"read_x3", read_x3},
     {"read_x4", read_x4},
+#endif
+
+#if WRITE_UNROLL
+    {"write_x1", write_x1},
+    {"write_x2", write_x2},
+    {"write_x3", write_x3},
+    {"write_x4", write_x4},
 #endif
 };
 
