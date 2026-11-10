@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define BUFFER_ALLOC_MMAP 1
+
 #include "buffer.c"
 #include "platform.c"
 #include "repetition_tester.c"
@@ -10,7 +12,8 @@
 #define TEST_COND_JUMP 0
 #define READ_UNROLL 0
 #define WRITE_UNROLL 0
-#define BYTE_READ 1
+#define BYTE_READ 0
+#define READ_WIDTHS 1
 
 #if NOP_LOOP
 extern void MOVAllBytesASM(uint64_t size, char *data);
@@ -46,6 +49,14 @@ extern void write_x4(uint64_t size, char *data);
 #if BYTE_READ
 extern void Read_1x2(uint64_t size, char *data);
 extern void Read_8x2(uint64_t size, char *data);
+#endif
+
+#if READ_WIDTHS
+extern void read_4x2(uint64_t size, char *data);
+extern void read_8x2(uint64_t size, char *data);
+extern void read_16x2(uint64_t size, char *data);
+extern void read_32x2(uint64_t size, char *data);
+extern void read_64x2(uint64_t size, char *data);
 #endif
 
 typedef void asm_func(uint64_t size, char *data);
@@ -90,6 +101,14 @@ struct test_function test_functions[] = {
 #if BYTE_READ
     {"Read_1x2", Read_1x2},
     {"Read_8x2", Read_8x2},
+#endif
+
+#if READ_WIDTHS
+    {"read_4x2 ", read_4x2},
+    {"read_8x2 ", read_8x2},
+    {"read_16x2", read_16x2},
+    {"read_32x2", read_32x2},
+    {"read_64x2", read_64x2},
 #endif
 };
 
