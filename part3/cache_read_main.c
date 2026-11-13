@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -24,6 +25,10 @@ int main(int argc, char **argv) {
   if (buffer.data == 0) {
     fprintf(stderr, "ERROR: failed to allocate buffer\n");
     return 1;
+  }
+
+  for (size_t i = 0; i < buffer.size; ++i) {
+    buffer.data[i] = i;
   }
 
   uint32_t bit_count = log2(1024 * 1024) + 1;
